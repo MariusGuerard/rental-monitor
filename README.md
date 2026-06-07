@@ -76,12 +76,26 @@ console/log. To enable Telegram, set these in the LaunchAgent's
 ./.venv/bin/python main.py --seed   # record current listings WITHOUT alerting
 ```
 
-### Scheduling (launchd, every 5 min)
-LaunchAgent: `~/Library/LaunchAgents/com.rentalmonitor.plist`
+### Scheduling — GitHub Actions (primary, runs 24/7)
+`.github/workflows/monitor.yml` runs the sweep every 5 min on GitHub's
+servers, so it works even when your Mac is off. State (`data/seen.sqlite3` =
+dedupe + geocode cache) persists between runs via `actions/cache`; if that
+cache is ever lost, `main.py`'s empty-DB guard runs a silent seed so you're
+never spammed with stale listings. Secrets live in GitHub Secrets (same names
+as below). Scheduled runs can lag 5–15 min under GitHub load.
 ```bash
-launchctl load   ~/Library/LaunchAgents/com.rentalmonitor.plist   # start
-launchctl unload ~/Library/LaunchAgents/com.rentalmonitor.plist   # stop
-launchctl list | grep rentalmonitor                               # status
+gh workflow run monitor.yml                 # trigger a run now
+gh run list --workflow=monitor.yml          # recent runs
+gh run view <id> --log                       # inspect a run
+```
+
+### Scheduling — launchd (local, DISABLED)
+A LaunchAgent (`com.rentalmonitor.plist.disabled`, kept in the repo dir) can
+run it locally instead — but **don't run both**, or you'll get double alerts
+(separate dedupe state). Only re-enable if you turn the GitHub workflow off:
+```bash
+cp com.rentalmonitor.plist.disabled ~/Library/LaunchAgents/com.rentalmonitor.plist
+launchctl load ~/Library/LaunchAgents/com.rentalmonitor.plist
 ```
 
 ## Logs
