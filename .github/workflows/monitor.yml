@@ -1,0 +1,48 @@
+name: rental-monitor
+
+# Runs the sweep on a schedule so it works even when your Mac is off.
+# NOTE: GitHub's scheduled runs can be delayed 5-15+ min under load — fine for
+# a catch-all, but the PM/Craigslist edge still comes from the local/always-on
+# path if you keep one.
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum)
+  workflow_dispatch: {}      # allow manual runs from the Actions tab
+
+# Never let two sweeps overlap (they'd share/clobber the state cache).
+concurrency:
+  group: rental-monitor
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      # Restore the dedupe/geocode state DB from the previous run. The unique
+      # key always saves a fresh cache; restore-keys grabs the latest prior one.
+      - name: Restore state DB
+        uses: actions/cache@v4
+        with:
+          path: data/seen.sqlite3
+          key: rental-db-${{ github.run_id }}
+          restore-keys: |
+            rental-db-
+
+      - name: Run sweep
+        env:
+          RENTAL_TELEGRAM_TOKEN: ${{ secrets.RENTAL_TELEGRAM_TOKEN }}
+          RENTAL_TELEGRAM_CHATS: ${{ secrets.RENTAL_TELEGRAM_CHATS }}
+          RENTAL_EMAIL_ADDR: ${{ secrets.RENTAL_EMAIL_ADDR }}
+          RENTAL_EMAIL_APP_PW: ${{ secrets.RENTAL_EMAIL_APP_PW }}
+          RENTAL_PACKET_URL: ${{ secrets.RENTAL_PACKET_URL }}
+        run: python main.py
