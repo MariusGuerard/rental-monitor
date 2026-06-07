@@ -1,23 +1,23 @@
 name: rental-monitor
 
-# Runs the sweep on a schedule so it works even when your Mac is off.
-# NOTE: GitHub's scheduled runs can be delayed 5-15+ min under load — fine for
-# a catch-all, but the PM/Craigslist edge still comes from the local/always-on
-# path if you keep one.
+# Self-contained loop: instead of relying on GitHub's flaky every-5-min cron,
+# ONE run stays alive ~5.7h and sweeps every 5 min internally. A coarse
+# schedule restarts it; because runs are long and overlap, a queued restart
+# always picks up when the previous one ends (concurrency keeps one pending),
+# so coverage stays continuous even if a scheduled tick lags.
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum)
-  workflow_dispatch: {}      # allow manual runs from the Actions tab
+    - cron: "0 */4 * * *"    # restart the long-running loop ~every 4h
+  workflow_dispatch: {}       # manual kick (used to start the very first one)
 
-# Never let two sweeps overlap (they'd share/clobber the state cache).
 concurrency:
   group: rental-monitor
-  cancel-in-progress: false
+  cancel-in-progress: false   # a restart while running queues, then continues
 
 jobs:
   sweep:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
 
@@ -28,8 +28,8 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      # Restore the dedupe/geocode state DB from the previous run. The unique
-      # key always saves a fresh cache; restore-keys grabs the latest prior one.
+      # State DB (dedupe + geocode cache) persists between runs. Saved once at
+      # job end; within a run the on-disk DB carries across loop iterations.
       - name: Restore state DB
         uses: actions/cache@v4
         with:
@@ -38,11 +38,16 @@ jobs:
           restore-keys: |
             rental-db-
 
-      - name: Run sweep
+      - name: Sweep every 5 min for ~5.7h
         env:
           RENTAL_TELEGRAM_TOKEN: ${{ secrets.RENTAL_TELEGRAM_TOKEN }}
           RENTAL_TELEGRAM_CHATS: ${{ secrets.RENTAL_TELEGRAM_CHATS }}
           RENTAL_EMAIL_ADDR: ${{ secrets.RENTAL_EMAIL_ADDR }}
           RENTAL_EMAIL_APP_PW: ${{ secrets.RENTAL_EMAIL_APP_PW }}
           RENTAL_PACKET_URL: ${{ secrets.RENTAL_PACKET_URL }}
-        run: python main.py
+        run: |
+          END=$(( $(date +%s) + 340*60 ))   # loop ~5h40m, leaving buffer
+          while [ "$(date +%s)" -lt "$END" ]; do
+            python main.py || true
+            [ "$(date +%s)" -lt "$END" ] && sleep 300
+          done
