@@ -187,7 +187,7 @@ EMAIL_TRUST_SAVED_SEARCH = True
 # addresses that look like SF are geocoded (keeps Nominatim calls minimal).
 SF_ADDRESS_HINT = re.compile(r"san\s*francisco|\b9411[0-9]\b|\b9412[0-9]\b", re.I)
 GEOCODE_DELAY = 1.1   # seconds between live Nominatim calls (their rate limit)
-NOMINATIM_UA = "rental-monitor/1.0 (personal use; marius.guerard@gmail.com)"
+NOMINATIM_UA = "rental-monitor/1.0 (personal hobby project)"
 
 # Browser-like headers; Craigslist 403s bare clients.
 HTTP_HEADERS = {
