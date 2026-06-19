@@ -49,5 +49,6 @@ jobs:
           END=$(( $(date +%s) + 340*60 ))   # loop ~5h40m, leaving buffer
           while [ "$(date +%s)" -lt "$END" ]; do
             python main.py || true
-            [ "$(date +%s)" -lt "$END" ] && sleep 300
+            [ "$(date +%s)" -lt "$END" ] && sleep 300 || true
           done
+          exit 0   # always succeed so the state-cache post step runs
