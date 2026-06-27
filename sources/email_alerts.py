@@ -54,7 +54,9 @@ _ADDR_RE = re.compile(
     r"\d+\s+[A-Za-z0-9 .#\-]+,\s*(?:San\s*Francisco|SF),\s*CA\s*9\d{4}", re.I)
 # Suffix-anchored street address (avoids grabbing "1,018 Sq. Ft." etc.).
 _ADDR_SUFFIX = re.compile(
-    r"(?<![\d,.])\b\d{1,5}\s+[A-Za-z0-9'.\- ]{1,30}?"
+    r"(?<![\d,.])\b\d{1,5}\s+"
+    r"(?!sq\b|sq\.|square|ft\b|ft\.)"          # not "688 Sq. Ft. ..."
+    r"[A-Za-z0-9'.\- ]{1,30}?"
     r"(?:St|Street|Ave|Avenue|Blvd|Way|Dr|Drive|Ct|Court|Ln|Lane|Pl|Place|"
     r"Ter|Terrace|Rd|Road)\b\.?,?\s*San\s*Francisco(?:,?\s*CA)?(?:\s*9\d{4})?",
     re.I)

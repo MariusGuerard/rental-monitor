@@ -78,9 +78,13 @@ def run_once(seed: bool = False) -> None:
                 log(f"[{name}] SEED (silent): {listing.title} -> {listing.url}")
                 continue
             delivered = notify.send(listing)
+            if not delivered:
+                # Transient send failure: do NOT record, so it's retried next
+                # sweep instead of being silently lost.
+                log(f"[{name}] SEND FAILED (will retry): {listing.title}")
+                continue
             db.record(conn, listing, notified=True, dedup_key=key)
-            if delivered:
-                alerted += 1
+            alerted += 1
             log(f"[{name}] MATCH: {listing.title} -> {listing.url}")
 
     verb = "seeded" if seed else "pushed"

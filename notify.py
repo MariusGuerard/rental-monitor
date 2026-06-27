@@ -3,6 +3,7 @@ notification + console/log line so nothing is silent during local testing."""
 
 import subprocess
 import sys
+import time
 
 import httpx
 
@@ -47,16 +48,22 @@ def _telegram(text: str) -> bool:
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     ok = True
     for chat_id in config.TELEGRAM_CHAT_IDS:
-        try:
-            r = httpx.post(url, json={
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": False,
-            }, timeout=10)
-            r.raise_for_status()
-        except Exception as e:  # noqa: BLE001
-            print(f"[notify] telegram send failed for {chat_id}: {e}",
-                  file=sys.stderr)
+        delivered = False
+        for attempt in range(3):   # retry transient network/rate-limit blips
+            try:
+                r = httpx.post(url, json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "disable_web_page_preview": False,
+                }, timeout=15)
+                r.raise_for_status()
+                delivered = True
+                break
+            except Exception as e:  # noqa: BLE001
+                print(f"[notify] telegram send attempt {attempt + 1} failed "
+                      f"for {chat_id}: {e}", file=sys.stderr)
+                time.sleep(2 * (attempt + 1))
+        if not delivered:
             ok = False
     return ok
 
