@@ -212,6 +212,52 @@ def _parse_redfin(subject: str, html: str, visible: str) -> list[Listing]:
     )]
 
 
+_ZUMPER_ADDR = re.compile(
+    r"\d{1,5}\s+(?!(?:bed|bath|sq|studio)s?\b)"   # not "1 Bath 1380 ..."
+    r"[A-Za-z0-9 .#'\-]+?,\s*San\s*Francisco", re.I)
+
+
+def _first_link(html: str, host: str) -> str:
+    for a in HTMLParser(html).css("a"):
+        h = a.attributes.get("href", "")
+        if host in h:
+            return h
+    return ""
+
+
+def _parse_zumper(html: str, visible: str) -> list[Listing]:
+    """Zumper emails are multi-listing digests with opaque click-tracking, but
+    the visible text clusters cleanly per unit: '$3,600 1 Bed 1 Bath <addr>,
+    San Francisco'. Split on '$' and pull price/beds/address from each chunk."""
+    link = _first_link(html, "clicks.zumper.com") or "https://www.zumper.com"
+    out, seen = [], set()
+    for chunk in visible.split("$")[1:]:
+        mp = re.match(r"\s*([\d,]{3,6})", chunk)
+        ma = _ZUMPER_ADDR.search(chunk)
+        if not (mp and ma):
+            continue
+        address = re.sub(r"\s+", " ", ma.group(0)).strip()
+        if address in seen:
+            continue
+        seen.add(address)
+        price = int(mp.group(1).replace(",", ""))
+        mb = re.search(r"(\d+(?:\.\d+)?)\s*Bed", chunk, re.I)
+        beds = float(mb.group(1)) if mb else (
+            0.0 if re.search(r"studio", chunk, re.I) else None)
+        geo_addr = re.sub(r"#\S+", "", address).strip(" ,")
+        if not re.search(r"\bCA\b", geo_addr, re.I):
+            geo_addr += ", CA"
+        lat, lon = geo.geocode(geo_addr)
+        slug = re.sub(r"[^a-z0-9]", "", address.lower())[:40]
+        out.append(Listing(
+            uid=f"email:zumper:{slug}", source="email:zumper",
+            title=address, url=link, price=price, bedrooms=beds,
+            lat=lat, lon=lon, address=address, body=address,
+            prefiltered=lat is None,
+        ))
+    return out
+
+
 def _parse_message(msg, sender: str) -> list[Listing]:
     html_body, plain = _email_text(msg)
     tree = HTMLParser(html_body) if html_body else None
@@ -222,6 +268,11 @@ def _parse_message(msg, sender: str) -> list[Listing]:
     # Zillow wraps links in click-tracking; handle it specially via zpid.
     if "_zpid" in html_body or "zillow.com" in (sender + visible).lower():
         zres = _parse_zillow(subject, html_body, " ".join(visible.split()))
+        if zres:
+            return zres
+    # Zumper: multi-listing digest, parse every unit from the text clusters.
+    if "zumper" in (sender + visible[:300]).lower():
+        zres = _parse_zumper(html_body, " ".join(visible.split()))
         if zres:
             return zres
     # Redfin also wraps links opaquely; parse address + amenities from body.
