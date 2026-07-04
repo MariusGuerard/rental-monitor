@@ -141,6 +141,7 @@ APPFOLIO_SUBDOMAINS = [
     "wcpm",              # West Coast Property Management (SF; some commercial)
     "bancalsf",          # BanCal Properties (SF + Peninsula)
     "relisto",           # ReLISTO (SF apartment specialist)
+    "azaripm",           # Azari Property Management (SF residential)
 ]
 
 # Buildium: same idea, at <slug>.managebuilding.com/Resident/public/rentals.
@@ -149,6 +150,7 @@ BUILDIUM_SUBDOMAINS = [
     "rajproperties",     # Raj Properties (Berkeley/Oakland/SF; Outer Sunset page)
     "keyopp",            # KeyOpp Property Management (SF; Richmond activity)
     "thesfpropertymanagement",  # TheSFPropertyManagement (SF, Bay-Area-wide)
+    "mdlproperty",       # MDL Property Management (SF residential)
 ]
 
 # Propertyware: the public listing widget hits a JSON API on
