@@ -12,7 +12,8 @@ import db
 import dedupe
 import filters
 import notify
-from sources import appfolio, buildium, craigslist, email_alerts, propertyware
+from sources import (appfolio, buildium, craigslist, email_alerts, haoshiyou,
+                     propertyware)
 
 # Register detectors here as you add them (FB, ...).
 SOURCES = {
@@ -21,6 +22,7 @@ SOURCES = {
     "buildium": buildium.fetch,
     "propertyware": propertyware.fetch,
     "email": email_alerts.fetch,
+    "haoshiyou": haoshiyou.fetch,
 }
 
 
