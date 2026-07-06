@@ -58,6 +58,27 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def get_kv(key: str) -> str | None:
+    """Small key/value store (own connection — usable from any source)."""
+    conn = _connect()
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        row = conn.execute("SELECT v FROM kv WHERE k = ?", (key,)).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def set_kv(key: str, value: str) -> None:
+    conn = _connect()
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+        conn.execute("INSERT OR REPLACE INTO kv VALUES (?, ?)", (key, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def is_new(conn: sqlite3.Connection, uid: str) -> bool:
     cur = conn.execute("SELECT 1 FROM seen WHERE uid = ?", (uid,))
     return cur.fetchone() is None

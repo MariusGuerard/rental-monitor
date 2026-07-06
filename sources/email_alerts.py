@@ -341,16 +341,40 @@ def _parse_message(msg, sender: str) -> list[Listing]:
 def fetch(is_seen=None) -> list[Listing]:
     if not (config.EMAIL_ADDRESS and config.EMAIL_APP_PASSWORD):
         return []
+    import db as _db
     out = []
     try:
-        M = imaplib.IMAP4_SSL(config.EMAIL_IMAP_HOST)
+        # timeout is essential: imaplib has NO default socket timeout, and a
+        # stalled connection otherwise blocks the whole sweep loop forever
+        # (observed in production — sweep frozen >15 min on a dead socket).
+        M = imaplib.IMAP4_SSL(config.EMAIL_IMAP_HOST, timeout=30)
         M.login(config.EMAIL_ADDRESS, config.EMAIL_APP_PASSWORD)
         M.select(config.EMAIL_MAILBOX, readonly=True)
-        since = (date.today() - timedelta(days=config.EMAIL_LOOKBACK_DAYS)) \
-            .strftime("%d-%b-%Y")
-        typ, data = M.search(None, "SINCE", since)
-        for num in data[0].split():
-            typ, msgdata = M.fetch(num, "(RFC822)")
+
+        # UID watermark: only ever download messages we haven't processed.
+        # (Previously every sweep re-fetched the full 3-day window — dozens of
+        # large HTML emails — which was slow and hang-prone.) UIDs are stable
+        # per mailbox generation; if UIDVALIDITY changes, start over.
+        validity = (M.response("UIDVALIDITY")[1] or [b""])[0].decode()
+        stored_validity = _db.get_kv("imap_uidvalidity")
+        last_uid = int(_db.get_kv("imap_last_uid") or 0) \
+            if stored_validity == validity else 0
+
+        if last_uid:
+            typ, data = M.uid("search", None, f"UID {last_uid + 1}:*")
+            # Gmail returns the last message even when none are new; filter.
+            uids = [u for u in data[0].split() if int(u) > last_uid]
+        else:
+            # First run (or mailbox reset): process the recent window only.
+            since = (date.today() - timedelta(days=config.EMAIL_LOOKBACK_DAYS)) \
+                .strftime("%d-%b-%Y")
+            typ, data = M.uid("search", None, "SINCE", since)
+            uids = data[0].split()
+
+        max_uid = last_uid
+        for u in uids:
+            typ, msgdata = M.uid("fetch", u, "(RFC822)")
+            max_uid = max(max_uid, int(u))
             if not msgdata or not msgdata[0]:
                 continue
             msg = email.message_from_bytes(msgdata[0][1])
@@ -363,6 +387,9 @@ def fetch(is_seen=None) -> list[Listing]:
                 if is_seen and is_seen(listing.uid):
                     continue
                 out.append(listing)
+        if max_uid != last_uid or stored_validity != validity:
+            _db.set_kv("imap_uidvalidity", validity)
+            _db.set_kv("imap_last_uid", str(max_uid))
         M.logout()
     except Exception as e:  # noqa: BLE001
         print(f"[email] error: {e}", file=sys.stderr)
