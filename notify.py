@@ -81,6 +81,13 @@ def _macos(title: str, text: str) -> None:
         pass
 
 
+def send_text(text: str) -> bool:
+    """Send a plain status/health message (no listing formatting)."""
+    delivered = _telegram(text)
+    print(text)
+    return delivered
+
+
 def send(listing: Listing) -> bool:
     """Notify all channels. Returns True if at least one channel delivered."""
     text = _format(listing)

@@ -13,6 +13,7 @@ from selectolax.parser import HTMLParser
 
 import config
 import geo
+import health
 from db import Listing
 
 
@@ -74,6 +75,7 @@ def _fetch_subdomain(client: httpx.Client, subdomain: str) -> list[Listing]:
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         print(f"[buildium:{subdomain}] fetch failed: {e}", file=sys.stderr)
+        health.error(f"buildium:{subdomain}", e)
         return []
     out = []
     for card in HTMLParser(r.text).css("a.featured-listing"):

@@ -16,6 +16,7 @@ import httpx
 from selectolax.parser import HTMLParser
 
 import config
+import health
 from db import Listing
 
 _PRICE_RE = re.compile(r"\$\s*([\d,]+)")
@@ -37,6 +38,7 @@ def _scan_list(client: httpx.Client) -> list[Listing]:
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         print(f"[craigslist] list fetch failed: {e}", file=sys.stderr)
+        health.error("craigslist", e)
         return []
 
     out = []

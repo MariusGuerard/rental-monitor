@@ -14,6 +14,7 @@ from selectolax.parser import HTMLParser
 
 import config
 import geo
+import health
 from db import Listing
 
 _PRICE_RE = re.compile(r"\$\s*([\d,]+)")
@@ -69,6 +70,7 @@ def _fetch_subdomain(client: httpx.Client, subdomain: str) -> list[Listing]:
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         print(f"[appfolio:{subdomain}] fetch failed: {e}", file=sys.stderr)
+        health.error(f"appfolio:{subdomain}", e)
         return []
     cards = HTMLParser(r.text).css(".listing-item")
     out = []

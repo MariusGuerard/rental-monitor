@@ -12,6 +12,7 @@ import sys
 import httpx
 
 import config
+import health
 from db import Listing
 
 API_BASE = "https://connect.propertyware.com"
@@ -75,6 +76,7 @@ def _fetch_site(client: httpx.Client, site: dict) -> list[Listing]:
     except Exception as e:  # noqa: BLE001
         print(f"[propertyware:{site['name']}] fetch failed: {e}",
               file=sys.stderr)
+        health.error(f"propertyware:{site['name']}", e)
         return []
     items = data if isinstance(data, list) else data.get("data", [])
     return [_parse(it, site) for it in items if isinstance(it, dict)]

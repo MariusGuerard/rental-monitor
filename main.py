@@ -11,6 +11,7 @@ import config
 import db
 import dedupe
 import filters
+import health
 import notify
 from sources import (appfolio, buildium, craigslist, email_alerts, haoshiyou,
                      propertyware)
@@ -59,7 +60,11 @@ def run_once(seed: bool = False) -> None:
             log(f"[{name}] ERROR during fetch: {e}")
             continue
         total += len(listings)
+        health.record_source(name, len(listings))
         for listing in listings:
+            # Granular per-provider tally (e.g. email:zillow) for the digest.
+            if listing.source != name:
+                health.record_source(listing.source, 1)
             if not db.is_new(conn, listing.uid):
                 continue
             new += 1
@@ -93,6 +98,7 @@ def run_once(seed: bool = False) -> None:
     log(f"sweep done: {total} seen, {new} new, {matched} matched, "
         f"{alerted} {verb}")
     conn.close()
+    health.flush(new=new, matched=matched, pushed=alerted)
 
 
 if __name__ == "__main__":

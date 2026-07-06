@@ -18,6 +18,7 @@ import httpx
 from selectolax.parser import HTMLParser
 
 import config
+import health
 from db import Listing
 
 BASE = "https://haoshiyou.org"
@@ -61,6 +62,7 @@ def fetch(is_seen=None) -> list[Listing]:
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         print(f"[haoshiyou] fetch failed: {e}", file=sys.stderr)
+        health.error("haoshiyou", e)
         return []
 
     out = []

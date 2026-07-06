@@ -27,6 +27,7 @@ from selectolax.parser import HTMLParser
 
 import config
 import geo
+import health
 from db import Listing
 
 # (provider, id-regex, canonical-url-builder) — matched against each link.
@@ -372,6 +373,7 @@ def fetch(is_seen=None) -> list[Listing]:
             uids = data[0].split()
 
         max_uid = last_uid
+        health.emails_fetched(len(uids))
         for u in uids:
             typ, msgdata = M.uid("fetch", u, "(RFC822)")
             max_uid = max(max_uid, int(u))
@@ -393,4 +395,5 @@ def fetch(is_seen=None) -> list[Listing]:
         M.logout()
     except Exception as e:  # noqa: BLE001
         print(f"[email] error: {e}", file=sys.stderr)
+        health.error("email", e)
     return out

@@ -221,6 +221,11 @@ TELEGRAM_CHAT_IDS = [
 # every alert so you can apply in minutes. Fill this in once it's ready.
 APPLICATION_PACKET_URL = os.environ.get("RENTAL_PACKET_URL", "")
 
+# Heartbeat: daily health digest is sent on the first sweep after this hour
+# (local time below); source-failure alerts are throttled to one per 24h.
+HEALTH_DIGEST_HOUR = 9
+HEALTH_TZ = "America/Los_Angeles"
+
 # ---------------------------------------------------------------------------
 # RUNTIME
 # ---------------------------------------------------------------------------
