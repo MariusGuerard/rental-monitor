@@ -32,7 +32,9 @@ ZIP_CODES = ["94122"]
 import re  # noqa: E402
 
 # Avenues 41–48 (west of 40th), plus La Playa & Great Highway.
-_AVES = r"(4[1-8]\s*th\s*ave|la\s*playa|great\s*h(igh)?w(a)?y)"
+# NOTE: real ordinals are 41st/42nd/43rd/44th... — accept any suffix so
+# "43rd Ave" matches (an earlier version only matched "th", missing 41-43).
+_AVES = r"(4[1-8]\s*(?:st|nd|rd|th)\s*ave|la\s*playa|great\s*h(igh)?w(a)?y)"
 # Cross streets between Lincoln and Noriega (the named blocks in range).
 _CROSS = r"(lincoln|irving|judah|kirkham|lawton|moraga|noriega)"
 AREA_TEXT_PATTERNS = [re.compile(_AVES, re.I)]
@@ -119,7 +121,7 @@ CRAIGSLIST_SEARCH_URL = (
 # Only fetch a detail page when the list-stage location/title hints the
 # Sunset, to keep request volume low and polite.
 CRAIGSLIST_DETAIL_HINTS = [re.compile(p, re.I) for p in (
-    r"sunset", r"parkside", _AVES,
+    r"sunset", r"parkside", r"ocean\s*beach", _AVES,
 )]
 
 # AppFolio: most west-side PMs publish vacancies at <slug>.appfolio.com/listings
