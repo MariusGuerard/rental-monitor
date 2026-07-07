@@ -54,8 +54,49 @@ def _connect() -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(seen)")}
     if "dedup_key" not in cols:
         conn.execute("ALTER TABLE seen ADD COLUMN dedup_key TEXT")
+    # Alerts whose Telegram delivery failed, awaiting retry. Email listings
+    # can't be re-parsed (IMAP UID watermark), so they must persist here.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS pending (
+               uid       TEXT PRIMARY KEY,
+               payload   TEXT,
+               dedup_key TEXT,
+               attempts  INTEGER DEFAULT 0
+           )"""
+    )
     conn.commit()
     return conn
+
+
+def pending_add(conn: sqlite3.Connection, listing: "Listing",
+                dedup_key: str | None) -> None:
+    import dataclasses
+    import json
+    conn.execute(
+        "INSERT OR IGNORE INTO pending VALUES (?,?,?,0)",
+        (listing.uid, json.dumps(dataclasses.asdict(listing)), dedup_key))
+    conn.commit()
+
+
+def pending_list(conn: sqlite3.Connection) -> list:
+    return conn.execute(
+        "SELECT uid, payload, dedup_key, attempts FROM pending").fetchall()
+
+
+def pending_has(conn: sqlite3.Connection, uid: str) -> bool:
+    return conn.execute("SELECT 1 FROM pending WHERE uid = ?",
+                        (uid,)).fetchone() is not None
+
+
+def pending_remove(conn: sqlite3.Connection, uid: str) -> None:
+    conn.execute("DELETE FROM pending WHERE uid = ?", (uid,))
+    conn.commit()
+
+
+def pending_bump(conn: sqlite3.Connection, uid: str) -> None:
+    conn.execute("UPDATE pending SET attempts = attempts + 1 WHERE uid = ?",
+                 (uid,))
+    conn.commit()
 
 
 def get_kv(key: str) -> str | None:

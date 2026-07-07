@@ -5,6 +5,7 @@ exits — state lives in the SQLite dedupe DB, so restarts are safe.
 """
 
 import datetime as dt
+import json
 import sys
 
 import config
@@ -53,6 +54,24 @@ def run_once(seed: bool = False) -> None:
 
     total, new, matched, alerted = 0, 0, 0, 0
 
+    # Retry alerts whose Telegram delivery previously failed. Email listings
+    # are fetched exactly once (IMAP UID watermark), so a failed send would
+    # otherwise be lost forever — this queue is their only path to delivery.
+    for uid, payload, dkey, attempts in db.pending_list(conn):
+        listing = db.Listing(**json.loads(payload))
+        if attempts >= 30:  # ~2.5h of 5-min retries: give up, stop tracking
+            log(f"pending: giving up on {uid} after {attempts} attempts")
+            db.record(conn, listing, notified=False, dedup_key=dkey)
+            db.pending_remove(conn, uid)
+            continue
+        if notify.send(listing):
+            db.record(conn, listing, notified=True, dedup_key=dkey)
+            db.pending_remove(conn, uid)
+            alerted += 1
+            log(f"pending: delivered {listing.title} -> {listing.url}")
+        else:
+            db.pending_bump(conn, uid)
+
     for name, fetch in SOURCES.items():
         try:
             listings = fetch(is_seen=lambda uid: not db.is_new(conn, uid))
@@ -80,15 +99,19 @@ def run_once(seed: bool = False) -> None:
                 db.record(conn, listing, notified=False, dedup_key=key)
                 log(f"[{name}] DUP ({key}): {listing.title} -> {listing.url}")
                 continue
+            # Already queued for retry? The pending path owns its delivery.
+            if db.pending_has(conn, listing.uid):
+                continue
             if seed:
                 db.record(conn, listing, notified=False, dedup_key=key)
                 log(f"[{name}] SEED (silent): {listing.title} -> {listing.url}")
                 continue
             delivered = notify.send(listing)
             if not delivered:
-                # Transient send failure: do NOT record, so it's retried next
-                # sweep instead of being silently lost.
-                log(f"[{name}] SEND FAILED (will retry): {listing.title}")
+                # Transient send failure: queue for retry at the start of the
+                # next sweeps (sources like email won't re-return the listing).
+                db.pending_add(conn, listing, key)
+                log(f"[{name}] SEND FAILED (queued for retry): {listing.title}")
                 continue
             db.record(conn, listing, notified=True, dedup_key=key)
             alerted += 1

@@ -23,7 +23,7 @@ from db import Listing
 
 BASE = "https://haoshiyou.org"
 
-_WANTED = re.compile(r"求租|找房|想租|求&|wanted", re.I)          # seeking, not offering
+_WANTED = re.compile(r"求租|找房|想租|wanted", re.I)             # seeking, not offering
 _ROOM = re.compile(r"单间|单房|主卧|次卧|雅房|床位|合租|室友|分租|"
                    r"一间|房间出租|招室友|限女|限男|only\s*(fe)?male", re.I)
 _EASTBAY_ZIP = re.compile(r"\b94[5-9]\d{2}\b")                    # 945xx-949xx East Bay
