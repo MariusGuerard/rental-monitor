@@ -80,13 +80,30 @@ def flush(new: int, matched: int, pushed: int) -> None:
             e["last"] = msg
         db.set_kv("health_stats", json.dumps(stats))
 
-        # Immediate failure alert, throttled to one per source per 24h.
+        # Immediate failure alert — only for PERSISTENT failures (>= STREAK
+        # errors in quick succession), not one-off network blips: a single
+        # transient timeout in hundreds of sweeps self-heals and shouldn't
+        # page anyone (it still shows in the daily digest). Throttled to one
+        # alert per source per 24h.
+        STREAK, WINDOW = 3, 20 * 60
         now = time.time()
         for k, msg in _sweep["errors"].items():
+            raw = db.get_kv(f"health_errstreak:{k}")
+            try:
+                streak = json.loads(raw) if raw else {"n": 0, "ts": 0}
+            except ValueError:
+                streak = {"n": 0, "ts": 0}
+            # Consecutive-ish: within WINDOW of the previous error.
+            streak["n"] = streak["n"] + 1 if now - streak["ts"] <= WINDOW else 1
+            streak["ts"] = now
+            db.set_kv(f"health_errstreak:{k}", json.dumps(streak))
+            if streak["n"] < STREAK:
+                continue
             last = float(db.get_kv(f"health_alerted:{k}") or 0)
             if now - last > 24 * 3600:
                 notify.send_text(
-                    f"⚠️ rental-monitor: source '{k}' is failing: {msg}")
+                    f"⚠️ rental-monitor: source '{k}' failing "
+                    f"{streak['n']} sweeps in a row: {msg}")
                 db.set_kv(f"health_alerted:{k}", str(now))
 
         # Daily digest once we're past the digest hour (local time).
