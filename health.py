@@ -84,10 +84,13 @@ def flush(new: int, matched: int, pushed: int) -> None:
         # errors in quick succession), not one-off network blips: a single
         # transient timeout in hundreds of sweeps self-heals and shouldn't
         # page anyone (it still shows in the daily digest). Throttled to one
-        # alert per source per 24h.
+        # alert per source per 24h, and all sources crossing the threshold in
+        # the same sweep are BATCHED into one message (a platform-wide outage,
+        # e.g. AppFolio 503ing, would otherwise page once per subdomain).
         STREAK, WINDOW = 3, 20 * 60
         now = time.time()
-        for k, msg in _sweep["errors"].items():
+        alert_lines = []
+        for k, msg in sorted(_sweep["errors"].items()):
             raw = db.get_kv(f"health_errstreak:{k}")
             try:
                 streak = json.loads(raw) if raw else {"n": 0, "ts": 0}
@@ -101,10 +104,14 @@ def flush(new: int, matched: int, pushed: int) -> None:
                 continue
             last = float(db.get_kv(f"health_alerted:{k}") or 0)
             if now - last > 24 * 3600:
-                notify.send_text(
-                    f"⚠️ rental-monitor: source '{k}' failing "
-                    f"{streak['n']} sweeps in a row: {msg}")
+                alert_lines.append(
+                    f"• {k}: failing {streak['n']} sweeps in a row — {msg}")
                 db.set_kv(f"health_alerted:{k}", str(now))
+        if alert_lines:
+            plural = "s" if len(alert_lines) > 1 else ""
+            notify.send_text(
+                f"⚠️ rental-monitor: {len(alert_lines)} source{plural} "
+                f"failing persistently\n" + "\n".join(alert_lines))
 
         # Daily digest once we're past the digest hour (local time).
         local = _now_local()
